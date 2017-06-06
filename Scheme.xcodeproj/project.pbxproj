@@ -27,6 +27,7 @@
 		C75F1AB81EE636AA00A718A1 /* Scheme */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = Scheme; sourceTree = BUILT_PRODUCTS_DIR; };
 		C75F1ABB1EE636AA00A718A1 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		C75F1AC21EE636C500A718A1 /* Scheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Scheme.swift; sourceTree = "<group>"; };
+		C75F1AC51EE681F100A718A1 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -43,6 +44,7 @@
 		C75F1AAF1EE636AA00A718A1 = {
 			isa = PBXGroup;
 			children = (
+				C75F1AC51EE681F100A718A1 /* README.md */,
 				C75F1ABA1EE636AA00A718A1 /* Scheme */,
 				C75F1AB91EE636AA00A718A1 /* Products */,
 			);
