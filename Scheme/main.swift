@@ -10,6 +10,8 @@ import Foundation
 
 let environment = Environment()
 
+// (define (foo n) (display n) (foo (+ 1 n))) (foo 0)
+
 while true {
     do {
         print("> ", terminator: "")

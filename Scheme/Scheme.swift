@@ -23,6 +23,8 @@ public indirect enum Datum: CustomStringConvertible {
     case SpecialForm(String, (Environment, Datum) throws -> Datum)
     case Closure([String:Datum], Datum, Cell)
 
+    // TODO: implement eq?, eqv? and eqvalue?
+
     public var isNil: Bool {
         guard case .Nil = self else { return true }
         return false
@@ -308,17 +310,16 @@ public class Environment {
 
     func define(_ first: Cell, evaluate: Bool = true) throws {
         if case let .Symbol(symbol) = first.car {
-
             var value: Datum = .Nil
             if case let .Pointer(def) = first.cdr {
                 value = evaluate ? try eval(def.car) : def.car
             }
 
             define_var(symbol, value)
-        } else if case let .Pointer(lambda) = first.car {
 
+        } else if case let .Pointer(lambda) = first.car {
             guard case let.Pointer(second) = first.cdr
-            else { throw Exception.General("Must provide at least two parameters") }
+                else { throw Exception.General("Must provide at least two parameters") }
 
             guard case let .Symbol(symbol) = lambda.car
                 else { throw Exception.General("Lambda name must be a symbol") }
@@ -341,6 +342,12 @@ public class Environment {
     }
 
     var stack: [[String: Datum]] = [[
+        "display": .Procedure("display", {args in
+            for arg in args {
+                print(arg.display)
+            }
+            return .Nil
+        }),
         "+": .Procedure("add", Environment.op(+, 0)),
         "*": .Procedure("mul", Environment.op(*, 1)),
         "-": .Procedure("sub", Environment.op(-)),
@@ -351,6 +358,7 @@ public class Environment {
         "<=": .Procedure("le", Environment.cmp(<=)),
         ">=": .Procedure("ge", Environment.cmp(>=)),
         "number?": .Procedure("number?", Environment.pred({ $0.isNumber })),
+        // in general we will try to avoid including library methods here
 //        "zero?": .Procedure("zero?", Environment.pred({ $0.isZero })),
         "lambda": .SpecialForm("lambda", { env, cell in
             guard case let .Pointer(first) = cell, case let .Pointer(second) = first.cdr
@@ -359,6 +367,7 @@ public class Environment {
             return .Closure(env.close(), first.car, second)
         }),
         "letrec": .SpecialForm("let", { env, cell in
+            // TODO: add support for named letrec
             guard case let .Pointer(first) = cell, case let .Pointer(second) = first.cdr
                 else { throw Exception.General("Must provide at least two parameters") }
             guard case var .Pointer(vars) = first.car else { throw Exception.General("First parameter must be a list") }
@@ -441,6 +450,7 @@ public class Environment {
             if case let .Procedure(_ , proc) = e {
 
                 // TODO: use a proper list instead of Array
+                // the current way doesn't support improper lists
                 var last = c.cdr
                 var args = [Datum]()
                 while case let .Pointer(cell) = last {
