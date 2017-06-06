@@ -34,8 +34,8 @@ public indirect enum Datum: CustomStringConvertible {
     }
 
     public var isNumber: Bool {
-        guard case .Number = self else { return true }
-        return false
+        guard case .Number = self else { return false }
+        return true
     }
 
     public var isZero: Bool {
