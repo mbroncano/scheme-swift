@@ -445,78 +445,96 @@ public class Environment {
     // TODO: http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_sec_11.20
     func eval(_ car: Datum, _ tail: Bool = false) throws -> Datum {
 
-        if case let .Pointer(c) = car {
-            let e = try eval(c.car)
-            if case let .Procedure(_ , proc) = e {
+        var car = car
+        var result: Datum = .Nil
+        var tco = false
 
-                // TODO: use a proper list instead of Array
-                // the current way doesn't support improper lists
-                var last = c.cdr
-                var args = [Datum]()
-                while case let .Pointer(cell) = last {
-                    try args.append(eval(cell.car))
-                    last = cell.cdr
-                }
+        repeat {
+            if case let .Pointer(c) = car {
+                let e = try eval(c.car)
+                if case let .Procedure(_ , proc) = e {
 
-                return try proc(args)
-            } else if case let .SpecialForm(_, form) = e {
-                return try form(self, c.cdr)
-            } else if case let .Closure(frame, formal, expr) = e {
-                extend(frame)
-
-                var result: Datum = .Nil
-                guard case .Pointer = c.cdr else { throw Exception.General("Proper list required for evaluation")}
-                let args = try eval_args(c.cdr)
-
-                // bind the variables
-                switch formal {
-                case var .Pointer(list):
-                    var args = args
-                    while true {
-                        guard case let .Symbol(symbol) = list.car,
-                            case let .Pointer(value) = args
-                            else { break }
-                        define_var(symbol, value.car)
-
-                        if case let .Pointer(next) = list.cdr {
-                            list = next
-                        } else if case let .Symbol(rest) = list.cdr {
-                            define_var(rest, value.cdr)
-                            break
-                        } else if case .Nil =  list.cdr {
-                            break
-                        } else {
-                            throw Exception.General("The 'rest' parameter should be a symbol \(list.cdr)")
-                        }
-
-                        guard case .Pointer = value.cdr else { break }
-                        args = value.cdr
+                    // TODO: use a proper list instead of Array
+                    // the current way doesn't support improper lists
+                    var last = c.cdr
+                    var args = [Datum]()
+                    while case let .Pointer(cell) = last {
+                        try args.append(eval(cell.car))
+                        last = cell.cdr
                     }
-                case let .Symbol(symbol):
-                    define_var(symbol, args)
-                default:
-                    throw Exception.General("Formal must be a list or a symbol")
-                }
 
-                // evaluate the expressions left to right
-                var body = expr
-                while true {
-                    result = try eval(body.car)
-                    guard case let .Pointer(next) = body.cdr else { break }
-                    body = next
-                }
-                
-                unextend()
+                    return try proc(args)
+                    
+                } else if case let .SpecialForm(_, form) = e {
+                    return try form(self, c.cdr)
 
-                return result
+                } else if case let .Closure(frame, formal, expr) = e {
+                    if !tco {
+                        extend(frame)
+                    }
+
+                    guard case .Pointer = c.cdr else { throw Exception.General("Proper list required for evaluation")}
+                    let args = try eval_args(c.cdr)
+
+                    // bind the variables
+                    switch formal {
+                    case var .Pointer(list):
+                        var args = args
+                        while true {
+                            guard case let .Symbol(symbol) = list.car,
+                                case let .Pointer(value) = args
+                                else { break }
+                            define_var(symbol, value.car)
+
+                            if case let .Pointer(next) = list.cdr {
+                                list = next
+                            } else if case let .Symbol(rest) = list.cdr {
+                                define_var(rest, value.cdr)
+                                break
+                            } else if case .Nil =  list.cdr {
+                                break
+                            } else {
+                                throw Exception.General("The 'rest' parameter should be a symbol \(list.cdr)")
+                            }
+
+                            guard case .Pointer = value.cdr else { break }
+                            args = value.cdr
+                        }
+                    case let .Symbol(symbol):
+                        define_var(symbol, args)
+                    default:
+                        throw Exception.General("Formal must be a list or a symbol")
+                    }
+
+                    // evaluate the expressions left to right
+                    var body = expr
+                    while true {
+                        //                    result = try eval(body.car)
+                        guard case let .Pointer(next) = body.cdr else { tco = true; break }
+                        result = try eval(body.car)
+                        body = next
+                    }
+
+                    if !tco {
+                        unextend()
+                        break;
+                    } else {
+                        car = body.car
+                        continue
+                    }
+
+                } else {
+                    throw Exception.General("Not a procedure, special form or closure \(e)")
+                }
+            } else if case let .Symbol(s) = car {
+                return try resolve(s)
             } else {
-                throw Exception.General("Not a procedure, special form or closure \(e)")
+                return car
             }
-        } else if case let .Symbol(s) = car {
-            return try resolve(s)
-        } else {
-            return car
-        }
+
+//            break
+        } while true
+        return result
     }
 
     init() {
