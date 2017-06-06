@@ -20,7 +20,7 @@ public indirect enum Datum: CustomStringConvertible {
     case Boolean(Bool)
     case Procedure(String, ([Datum]) throws -> Datum)
     case Symbol(String)
-    case SpecialForm(String, (Environment, Datum) throws -> Datum)
+    case SpecialForm(String, (Environment, Datum) throws -> (Datum, Bool))
     case Closure([String:Datum], Datum, Cell)
 
     // TODO: implement eq?, eqv? and eqvalue?
@@ -359,21 +359,20 @@ public class Environment {
         ">=": .Procedure("ge", Environment.cmp(>=)),
         "number?": .Procedure("number?", Environment.pred({ $0.isNumber })),
         // in general we will try to avoid including library methods here
-//        "zero?": .Procedure("zero?", Environment.pred({ $0.isZero })),
+        //        "zero?": .Procedure("zero?", Environment.pred({ $0.isZero })),
         "lambda": .SpecialForm("lambda", { env, cell in
             guard case let .Pointer(first) = cell, case let .Pointer(second) = first.cdr
                 else { throw Exception.General("Must provide at least two parameters") }
 
-            return .Closure(env.close(), first.car, second)
+            return (.Closure(env.close(), first.car, second), false)
         }),
         "letrec": .SpecialForm("let", { env, cell in
             // TODO: add support for named letrec
             guard case let .Pointer(first) = cell, case let .Pointer(second) = first.cdr
                 else { throw Exception.General("Must provide at least two parameters") }
-            guard case var .Pointer(vars) = first.car else { throw Exception.General("First parameter must be a list") }
 
-            // extend the environment
-            env.extend()
+            guard case var .Pointer(vars) = first.car
+                else { throw Exception.General("First parameter must be a list") }
 
             // evaluate the formals
             var cdr = vars.cdr
@@ -389,36 +388,34 @@ public class Environment {
             var result: Datum = .Nil
             var body = second
             while true {
-                result = try env.eval(body.car)
-                guard case let .Pointer(next) = body.cdr else { break }
+                guard case let .Pointer(next) = body.cdr
+                    else { return (body.car, true) }
+                _ = try env.eval(body.car)
                 body = next
             }
 
-            // remove the extended environment
-            env.unextend()
-
             // return the last result
-            return result
+            //return (.Nil, false)
         }),
         "if": .SpecialForm("if", { env, cell in
             guard case let .Pointer(first) = cell, case let .Pointer(second) = first.cdr
                 else { throw Exception.General("Must provide at least two parameters") }
 
             if try env.eval(first.car).isTrue {
-                return try env.eval(second.car)
+                return (second.car, true)
             }
 
             if case let .Pointer(third) = second.cdr {
-                return try env.eval(third.car)
+                return (third.car, true)
             }
 
-            return .Nil
+            return (.Nil, false)
         }),
         "quote": .SpecialForm("quote", { env, cell in
             guard case let .Pointer(first) = cell
                 else { throw Exception.General("Must provide at least a parameter") }
 
-            return first.car
+            return (first.car, false)
         }),
         "define": .SpecialForm("define", { env, cell in
             guard case let .Pointer(first) = cell
@@ -426,7 +423,7 @@ public class Environment {
 
             try env.define(first)
 
-            return .Nil
+            return (.Nil, false)
         })]]
 
     func eval_args(_ datum: Datum) throws -> Datum {
@@ -464,9 +461,21 @@ public class Environment {
                     }
 
                     return try proc(args)
-                    
+
                 } else if case let .SpecialForm(_, form) = e {
-                    return try form(self, c.cdr)
+
+                    if !tco {
+                        // extend()
+                    }
+
+                    let (res, tco) = try form(self, c.cdr)
+                    if !tco {
+                        // unextend()
+                        result = res
+                        break;
+                    } else {
+                        car = res
+                    }
 
                 } else if case let .Closure(frame, formal, expr) = e {
                     if !tco {
@@ -509,18 +518,18 @@ public class Environment {
                     // evaluate the expressions left to right
                     var body = expr
                     while true {
-                        //                    result = try eval(body.car)
                         guard case let .Pointer(next) = body.cdr else { tco = true; break }
                         result = try eval(body.car)
                         body = next
                     }
 
                     if !tco {
+                        // this never happends
                         unextend()
+                        result = body.car // is this always .Nil ?
                         break;
                     } else {
                         car = body.car
-                        continue
                     }
 
                 } else {
@@ -531,9 +540,8 @@ public class Environment {
             } else {
                 return car
             }
-
-//            break
         } while true
+
         return result
     }
 
