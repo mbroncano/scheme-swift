@@ -12,13 +12,48 @@ public enum Exception: Error {
     case General(String)
 }
 
+public class Cell: CustomStringConvertible {
+    var car: Datum
+    var cdr: Datum
+
+    init(car: Datum, cdr: Datum) {
+        self.car = car
+        self.cdr = cdr
+    }
+
+    public func next() -> Cell? {
+        if case let .Pointer(result) = cdr {
+            return result
+        }
+        return nil
+    }
+
+    public var description: String {
+        return "#(\(car), \(cdr))"
+    }
+
+    public var display: String {
+        switch (car, cdr) {
+        case (.Nil, _):
+            return "() \(cdr.display)"
+        case (_, .Nil):
+            return car.display
+        case (_, let .Pointer(cell)):
+            return "\(car.display) \(cell.display)"
+        default:
+            return "\(car.display) . \(cdr.display)"
+        }
+    }
+}
+
+
 public indirect enum Datum: CustomStringConvertible {
     case Nil
     case Pointer(Cell)
     case Number(Decimal)
     case Character(Character)
     case Boolean(Bool)
-    case Procedure(String, ([Datum]) throws -> Datum)
+    case Procedure(String, (Datum) throws -> Datum)
     case Symbol(String)
     case SpecialForm(String, (Environment, Datum) throws -> (Datum, Bool))
     case Closure([String:Datum], Datum)
@@ -84,33 +119,6 @@ public indirect enum Datum: CustomStringConvertible {
             return "(\(cell.display))"
         default:
             return "\(self)"
-        }
-    }
-}
-
-public class Cell: CustomStringConvertible {
-    let car: Datum
-    var cdr: Datum
-
-    init(car: Datum, cdr: Datum) {
-        self.car = car
-        self.cdr = cdr
-    }
-
-    public var description: String {
-        return "#(\(car), \(cdr))"
-    }
-
-    public var display: String {
-        switch (car, cdr) {
-        case (.Nil, _):
-            return "() \(cdr.display)"
-        case (_, .Nil):
-            return car.display
-        case (_, let .Pointer(cell)):
-            return "\(car.display) \(cell.display)"
-        default:
-            return "\(car.display) . \(cdr.display)"
         }
     }
 }
@@ -246,50 +254,71 @@ public class Environment {
         throw Exception.General("Unbound symbol: \(symbol)")
     }
 
-    static func op(_ op: @escaping (Decimal, Decimal) -> Decimal, _ def: Decimal? = nil) -> ([Datum]) throws -> Datum {
+    static func op4(_ op: @escaping (Decimal, Decimal) -> Bool) -> (Datum) throws -> Datum {
         return { args in
-            let reduce:(Decimal, Datum) throws -> Decimal = { acc, arg throws in
-                guard case let .Number(number) = arg
-                    else { throw Exception.General("Not a number: \(arg)") }
-                return op(acc, number)
-            }
+            guard case let .Pointer(list) = args
+                else { throw Exception.General("Internal error: \(args) must be a list") }
 
-            if let acc = def {
-                return try .Number(args.reduce(acc, reduce))
+            guard let first = list.next(), var iter = first.next()
+                else { throw Exception.General("Two parameters required") }
+            guard case var .Number(lhs) = first.car
+                else { throw Exception.General("Parameters must be numbers: \(first.car)") }
 
-            } else if let first = args.first, case let .Number(acc) = first {
-                return try .Number(args.dropFirst().reduce(acc, reduce))
 
-            } else {
-                throw Exception.General("Must provide at least 1 parameter")
+            repeat {
+                guard case let .Number(rhs) = iter.car
+                    else { throw Exception.General("Parameters must be numbers: \(iter.car)") }
 
-            }
+                if !op(lhs, rhs) { return .Boolean(false) }
 
+                lhs = rhs
+                guard let next = iter.next() else { return .Boolean(true) }
+                iter = next
+            } while true
         }
     }
 
-    static func cmp(_ op: @escaping (Decimal, Decimal) -> Bool) -> ([Datum]) throws -> Datum {
+    static func op3(_ op: @escaping (Decimal, Decimal) -> Decimal, _ def: Decimal) -> (Datum) throws -> Datum {
         return { args in
-            guard args.count > 1 else { throw Exception.General("At least two arguments required") }
+            guard case let .Pointer(first) = args
+                else { throw Exception.General("Internal error: \(args) must be a list") }
 
-            let res = try zip(args.dropLast(), args.dropFirst()).reduce(Bool(true), { acc, arg throws in
-                guard case let .Number(left) = arg.0
-                    else { throw Exception.General("Not a number: \(arg.0)") }
-                guard case let .Number(right) = arg.1
-                    else { throw Exception.General("Not a number: \(arg.1)") }
+            guard let next = first.next()
+                else { throw Exception.General("Parameter required") }
+            guard case let .Number(number) = next.car
+                else { throw Exception.General("\(next.car) must be a number") }
+            guard case .Pointer = next.cdr
+                else { return .Number(op(def, number)) }
 
-                return acc && op(left, right)
-
-            })
-
-            return .Boolean(res)
+            return try op2(op, number)(first.cdr)
         }
     }
 
-    static func pred(_ op: @escaping (Datum) -> Bool) -> ([Datum]) throws -> Datum {
+    static func op2(_ op: @escaping (Decimal, Decimal) -> Decimal, _ def: Decimal) -> (Datum) throws -> Datum {
         return { args in
-            guard let first = args.first, args.count == 1 else { throw Exception.General("Must provide one argument") }
-            return .Boolean(op(first))
+            guard case var .Pointer(first) = args
+                else { throw Exception.General("Internal error: \(args) must be a list") }
+
+            var acc = def
+            while let next = first.next() {
+                guard case let .Number(number) = next.car
+                    else { throw Exception.General("\(next.car) must be a number") }
+                acc = op(acc, number)
+                first = next
+            }
+            return .Number(acc)
+        }
+    }
+
+    static func pred(_ op: @escaping (Datum) -> Bool) -> (Datum) throws -> Datum {
+        return { args in
+            guard case let .Pointer(first) = args
+                else { throw Exception.General("Internal error: \(args) must be a list") }
+
+            guard let arg = first.next(), arg.next() == nil
+                else { throw Exception.General("Must provide one argument") }
+
+            return .Boolean(op(arg.car))
         }
     }
 
@@ -343,30 +372,33 @@ public class Environment {
 
     var stack: [[String: Datum]] = [[
         "display": .Procedure("display", {args in
-            for arg in args {
-                print(arg.display)
+            guard case var .Pointer(first) = args
+                else { throw Exception.General("Internal error: \(args) must be a list") }
+
+           while let next = first.next() {
+                print(next.car.display)
+                first = next
             }
             return .Nil
         }),
-        "+": .Procedure("add", Environment.op(+, 0)),
-        "*": .Procedure("mul", Environment.op(*, 1)),
-        "-": .Procedure("sub", Environment.op(-)),
-        "/": .Procedure("div", Environment.op(/)),
-        "<": .Procedure("lt", Environment.cmp(<)),
-        ">": .Procedure("gt", Environment.cmp(>)),
-        "=": .Procedure("eq", Environment.cmp(==)),
-        "<=": .Procedure("le", Environment.cmp(<=)),
-        ">=": .Procedure("ge", Environment.cmp(>=)),
+        "+": .Procedure("add", Environment.op2(+, 0)),
+        "*": .Procedure("mul", Environment.op2(*, 1)),
+        "-": .Procedure("sub", Environment.op3(-, 0)),
+        "/": .Procedure("div", Environment.op3(/, 1)),
+        "<": .Procedure("lt", Environment.op4(<)),
+        ">": .Procedure("gt", Environment.op4(>)),
+        "=": .Procedure("eq", Environment.op4(==)),
+        "<=": .Procedure("le", Environment.op4(<=)),
+        ">=": .Procedure("ge", Environment.op4(>=)),
         "number?": .Procedure("number?", Environment.pred({ $0.isNumber })),
-        // in general we will try to avoid including library methods here
-        //        "zero?": .Procedure("zero?", Environment.pred({ $0.isZero })),
+        "zero?": .Procedure("zero?", Environment.pred({ $0.isZero })),
         "lambda": .SpecialForm("lambda", { env, cell in
             guard case let .Pointer(first) = cell, case .Pointer = first.cdr
                 else { throw Exception.General("Must provide at least two parameters") }
 
             return (.Closure(env.close(), cell), false)
         }),
-        "letrec": .SpecialForm("let", { env, cell in
+        "let": .SpecialForm("let", { env, cell in
             // TODO: add support for named letrec
             guard case let .Pointer(first) = cell, case let .Pointer(second) = first.cdr
                 else { throw Exception.General("Must provide at least two parameters") }
@@ -453,14 +485,28 @@ public class Environment {
 
                     // TODO: use a proper list instead of Array
                     // the current way doesn't support improper lists
-                    var last = c.cdr
-                    var args = [Datum]()
-                    while case let .Pointer(cell) = last {
-                        try args.append(eval(cell.car))
-                        last = cell.cdr
+//                    var last = c.cdr
+//                    var args = [Datum]()
+//                    while case let .Pointer(cell) = last {
+//                        try args.append(eval(cell.car))
+//                        last = cell.cdr
+//                    }
+
+                    // evaluate the expressions left to right
+                    var iter = c
+                    var cell = Cell(car: .Nil, cdr: .Nil)
+                    let res: Datum = .Pointer(cell)
+                    while true {
+                        cell.car = try eval(iter.car)
+                        guard case let .Pointer(next) = iter.cdr else { break }
+                        iter = next
+
+                        let new = Cell(car: .Nil, cdr: .Nil)
+                        cell.cdr = .Pointer(new)
+                        cell = new
                     }
 
-                    result = try proc(args)
+                    result = try proc(res)
                     break;
 
                 } else if case let .SpecialForm(_, form) = e {
