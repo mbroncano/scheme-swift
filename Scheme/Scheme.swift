@@ -21,7 +21,7 @@ public indirect enum Datum: CustomStringConvertible {
     case Procedure(String, ([Datum]) throws -> Datum)
     case Symbol(String)
     case SpecialForm(String, (Environment, Datum) throws -> (Datum, Bool))
-    case Closure([String:Datum], Datum, Cell)
+    case Closure([String:Datum], Datum)
 
     // TODO: implement eq?, eqv? and eqvalue?
 
@@ -63,7 +63,7 @@ public indirect enum Datum: CustomStringConvertible {
             return "#<procedure: @\(name)>"
         case let .SpecialForm(name, _):
             return "#<special: @\(name)>"
-        case let .Closure(_, formal, _):
+        case let .Closure(_, formal):
             return "#<closure: @\(formal)>"
         }
     }
@@ -318,13 +318,13 @@ public class Environment {
             define_var(symbol, value)
 
         } else if case let .Pointer(lambda) = first.car {
-            guard case let.Pointer(second) = first.cdr
+            guard case .Pointer = first.cdr
                 else { throw Exception.General("Must provide at least two parameters") }
 
             guard case let .Symbol(symbol) = lambda.car
                 else { throw Exception.General("Lambda name must be a symbol") }
 
-            define_var(symbol, .Closure(close(), lambda.cdr, second))
+            define_var(symbol, .Closure(close(), .Pointer(Cell(car: lambda.cdr, cdr: first.cdr))))
 
         } else {
             throw Exception.General("Define must be a symbol or a lambda")
@@ -361,10 +361,10 @@ public class Environment {
         // in general we will try to avoid including library methods here
         //        "zero?": .Procedure("zero?", Environment.pred({ $0.isZero })),
         "lambda": .SpecialForm("lambda", { env, cell in
-            guard case let .Pointer(first) = cell, case let .Pointer(second) = first.cdr
+            guard case let .Pointer(first) = cell, case .Pointer = first.cdr
                 else { throw Exception.General("Must provide at least two parameters") }
 
-            return (.Closure(env.close(), first.car, second), false)
+            return (.Closure(env.close(), cell), false)
         }),
         "letrec": .SpecialForm("let", { env, cell in
             // TODO: add support for named letrec
@@ -444,7 +444,7 @@ public class Environment {
 
         var car = car
         var result: Datum = .Nil
-        var tco = false
+        var tail = tail
 
         repeat {
             if case let .Pointer(c) = car {
@@ -460,33 +460,33 @@ public class Environment {
                         last = cell.cdr
                     }
 
-                    return try proc(args)
+                    result = try proc(args)
+                    break;
 
                 } else if case let .SpecialForm(_, form) = e {
 
-                    if !tco {
-                        // extend()
-                    }
-
-                    let (res, tco) = try form(self, c.cdr)
-                    if !tco {
-                        // unextend()
+                    let (res, eval) = try form(self, c.cdr)
+                    if !eval {
                         result = res
-                        break;
-                    } else {
-                        car = res
+                        break
                     }
 
-                } else if case let .Closure(frame, formal, expr) = e {
-                    if !tco {
+                    tail = true
+                    car = res
+
+                } else if case let .Closure(frame, lambda) = e {
+                    if !tail {
                         extend(frame)
                     }
 
                     guard case .Pointer = c.cdr else { throw Exception.General("Proper list required for evaluation")}
                     let args = try eval_args(c.cdr)
 
+                    guard case let .Pointer(formal) = lambda, case let .Pointer(body) = formal.cdr
+                        else { throw Exception.General("Error in lambda formal and/or body") }
+
                     // bind the variables
-                    switch formal {
+                    switch formal.car {
                     case var .Pointer(list):
                         var args = args
                         while true {
@@ -516,31 +516,31 @@ public class Environment {
                     }
 
                     // evaluate the expressions left to right
-                    var body = expr
+                    var iter = body
                     while true {
-                        guard case let .Pointer(next) = body.cdr else { tco = true; break }
-                        result = try eval(body.car)
-                        body = next
+                        guard case let .Pointer(next) = iter.cdr else { break }
+                        result = try eval(iter.car)
+                        iter = next
                     }
 
-                    if !tco {
-                        // this never happends
-                        unextend()
-                        result = body.car // is this always .Nil ?
-                        break;
-                    } else {
-                        car = body.car
-                    }
+                    tail = true
+                    car = iter.car
 
                 } else {
                     throw Exception.General("Not a procedure, special form or closure \(e)")
                 }
             } else if case let .Symbol(s) = car {
-                return try resolve(s)
+                result = try resolve(s)
+                break;
             } else {
-                return car
+                result = car
+                break;
             }
         } while true
+
+        if tail {
+            unextend()
+        }
 
         return result
     }

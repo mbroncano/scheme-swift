@@ -22,7 +22,10 @@ while true {
                 let cell = Cell(car: first.car, cdr: .Nil)
                 //                print("~# ", cell.display)
                 try print("=", environment.eval(cell.car).display)
-                print(environment.stack)
+                guard environment.stack.count == 1 else {
+                    print(environment.stack)
+                    throw Exception.General("Stack error")
+                }
                 car = first.cdr
             }
         }
