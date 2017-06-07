@@ -494,6 +494,7 @@ public class Environment {
                         return .Pointer(Cell(car: ptr, cdr: acc))
                     })
 
+                    // we actually ignore the first 'car'
                     result = try proc(.Pointer(Cell(car: e, cdr: arg)))
                     break;
 
