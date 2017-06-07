@@ -483,30 +483,18 @@ public class Environment {
                 let e = try eval(c.car)
                 if case let .Procedure(_ , proc) = e {
 
-                    // TODO: use a proper list instead of Array
-                    // the current way doesn't support improper lists
-//                    var last = c.cdr
-//                    var args = [Datum]()
-//                    while case let .Pointer(cell) = last {
-//                        try args.append(eval(cell.car))
-//                        last = cell.cdr
-//                    }
-
-                    // evaluate the expressions left to right
-                    var iter = c
-                    var cell = Cell(car: .Nil, cdr: .Nil)
-                    let res: Datum = .Pointer(cell)
-                    while true {
-                        cell.car = try eval(iter.car)
-                        guard case let .Pointer(next) = iter.cdr else { break }
-                        iter = next
-
-                        let new = Cell(car: .Nil, cdr: .Nil)
-                        cell.cdr = .Pointer(new)
-                        cell = new
+                    var it = c
+                    var dd = [Datum]()
+                    while let next = it.next() {
+                        dd.append(try eval(next.car))
+                        it = next
                     }
 
-                    result = try proc(res)
+                    let arg: Datum = dd.reversed().reduce(it.cdr, { acc, ptr in
+                        return .Pointer(Cell(car: ptr, cdr: acc))
+                    })
+
+                    result = try proc(.Pointer(Cell(car: e, cdr: arg)))
                     break;
 
                 } else if case let .SpecialForm(_, form) = e {
