@@ -205,6 +205,8 @@ public indirect enum Node: CustomStringConvertible {
 
         while let c = iter.next() {
             switch c {
+            case ";":
+                while let n = iter.next(), n != "\n" {}
             case "(":
                 try add()
                 stack.append(.List([]))
@@ -402,6 +404,11 @@ public class Environment {
             // TODO: add support for named letrec
             guard case let .Pointer(first) = cell, case let .Pointer(second) = first.cdr
                 else { throw Exception.General("Must provide at least two parameters") }
+
+
+            if case let .Symbol(vars) = first.car {
+
+            }
 
             guard case var .Pointer(vars) = first.car
                 else { throw Exception.General("First parameter must be a list") }
