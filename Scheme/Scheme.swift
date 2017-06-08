@@ -12,6 +12,7 @@ public enum Exception: Error {
     case General(String)
 }
 
+public typealias Procedure = (Environment, Datum) throws -> Datum
 public class Cell: CustomStringConvertible {
     var car: Datum
     var cdr: Datum
@@ -35,7 +36,7 @@ public class Cell: CustomStringConvertible {
     public var display: String {
         switch (car, cdr) {
         case (.Nil, _):
-            return "() \(cdr.display)"
+            return "\(cdr.display)"
         case (_, .Nil):
             return car.display
         case (_, let .Pointer(cell)):
@@ -53,16 +54,21 @@ public indirect enum Datum: CustomStringConvertible {
     case Number(Decimal)
     case Character(Character)
     case Boolean(Bool)
-    case Procedure(String, (Datum) throws -> Datum)
+    case Procedure(String, Procedure)
     case Symbol(String)
+    case String(String)
     case SpecialForm(String, (Environment, Datum) throws -> (Datum, Bool))
     case Closure([String:Datum], Datum)
 
     // TODO: implement eq?, eqv? and eqvalue?
-
     public var isNil: Bool {
-        guard case .Nil = self else { return true }
-        return false
+        guard case .Nil = self else { return false }
+        return true
+    }
+
+    public var isNull: Bool {
+        guard case let .Pointer(cell) = self, case .Nil = cell.car else { return false }
+        return true
     }
 
     public var isTrue: Bool {
@@ -72,6 +78,21 @@ public indirect enum Datum: CustomStringConvertible {
 
     public var isNumber: Bool {
         guard case .Number = self else { return false }
+        return true
+    }
+
+    public var isString: Bool {
+        guard case .String = self else { return false }
+        return true
+    }
+
+    public var isSymbol: Bool {
+        guard case .Symbol = self else { return false }
+        return true
+    }
+
+    public var isPair: Bool {
+        guard case .Pointer = self else { return false }
         return true
     }
 
@@ -94,6 +115,8 @@ public indirect enum Datum: CustomStringConvertible {
             return "#<character: \(value)>"
         case let .Symbol(string):
             return "#<symbol: @\(string)>"
+        case let .String(string):
+            return "#<string: \"@\(string)\">"
         case let .Procedure(name, _):
             return "#<procedure: @\(name)>"
         case let .SpecialForm(name, _):
@@ -109,6 +132,8 @@ public indirect enum Datum: CustomStringConvertible {
             return ""
         case let .Symbol(string):
             return string
+        case let .String(string):
+            return "\"\(string)\""
         case let .Number(value):
             return "\(value)"
         case let .Character(char):
@@ -159,6 +184,8 @@ public indirect enum Node: CustomStringConvertible {
             default:
                 if let _ = Float(text), let number = Decimal(string: text) {
                     return .Number(number)
+                } else if let start = text.first, start == "\"" {
+                    return .String(String(text.dropFirst().dropLast()))
                 } else {
                     return .Symbol(text)
                 }
@@ -203,10 +230,37 @@ public indirect enum Node: CustomStringConvertible {
             }
         }
 
+        var string = false
         while let c = iter.next() {
+            if c == "\"" {
+                if string {
+                    text.append(c)
+                    try add()
+                } else {
+                    try add()
+                    text.append(c)
+                }
+
+                string = !string
+                continue
+            }
+
+            if string {
+                text.append(c)
+                continue
+            }
+
             switch c {
+            case "\"":
+                if string {
+
+                } else {
+                    string = true
+                }
+
             case ";":
                 while let n = iter.next(), n != "\n" {}
+
             case "(":
                 try add()
                 stack.append(.List([]))
@@ -256,8 +310,8 @@ public class Environment {
         throw Exception.General("Unbound symbol: \(symbol)")
     }
 
-    static func op4(_ op: @escaping (Decimal, Decimal) -> Bool) -> (Datum) throws -> Datum {
-        return { args in
+    static func op4(_ op: @escaping (Decimal, Decimal) -> Bool) -> Procedure {
+        return { env, args in
             guard case let .Pointer(list) = args
                 else { throw Exception.General("Internal error: \(args) must be a list") }
 
@@ -280,8 +334,8 @@ public class Environment {
         }
     }
 
-    static func op3(_ op: @escaping (Decimal, Decimal) -> Decimal, _ def: Decimal) -> (Datum) throws -> Datum {
-        return { args in
+    static func op3(_ op: @escaping (Decimal, Decimal) -> Decimal, _ def: Decimal) -> Procedure {
+        return { env, args in
             guard case let .Pointer(first) = args
                 else { throw Exception.General("Internal error: \(args) must be a list") }
 
@@ -292,12 +346,12 @@ public class Environment {
             guard case .Pointer = next.cdr
                 else { return .Number(op(def, number)) }
 
-            return try op2(op, number)(first.cdr)
+            return try op2(op, number)(env, first.cdr)
         }
     }
 
-    static func op2(_ op: @escaping (Decimal, Decimal) -> Decimal, _ def: Decimal) -> (Datum) throws -> Datum {
-        return { args in
+    static func op2(_ op: @escaping (Decimal, Decimal) -> Decimal, _ def: Decimal) -> Procedure {
+        return { env, args in
             guard case var .Pointer(first) = args
                 else { throw Exception.General("Internal error: \(args) must be a list") }
 
@@ -312,8 +366,8 @@ public class Environment {
         }
     }
 
-    static func pred(_ op: @escaping (Datum) -> Bool) -> (Datum) throws -> Datum {
-        return { args in
+    static func pred(_ op: @escaping (Datum) -> Bool) -> Procedure {
+        return { env, args in
             guard case let .Pointer(first) = args
                 else { throw Exception.General("Internal error: \(args) must be a list") }
 
@@ -321,6 +375,18 @@ public class Environment {
                 else { throw Exception.General("Must provide one argument") }
 
             return .Boolean(op(arg.car))
+        }
+    }
+
+    static func pred2(_ op: @escaping (Datum, Datum) -> Bool) -> Procedure {
+        return { env, args in
+            guard case let .Pointer(first) = args
+                else { throw Exception.General("Internal error: \(args) must be a list") }
+
+            guard let arg = first.next(), let second = arg.next()
+                else { throw Exception.General("Must provide two arguments") }
+
+            return .Boolean(op(arg.car, second.car))
         }
     }
 
@@ -373,7 +439,148 @@ public class Environment {
     }
 
     var stack: [[String: Datum]] = [[
-        "display": .Procedure("display", {args in
+        "null?": .Procedure("null?", Environment.pred({ $0.isNil })),
+
+        "set-cdr!": .Procedure("set-car!", { env, args in
+            guard case let .Pointer(first) = args
+                else { throw Exception.General("Internal error: \(args) must be a list") }
+
+            guard let arg = first.next(), let second = arg.next()
+                else { throw Exception.General("Must provide two arguments") }
+
+            guard case .Pointer = arg.car
+                else { throw Exception.General("First param must be a pair") }
+
+            arg.cdr = second.car
+
+            return .Nil
+        }),
+
+        "set-car!": .Procedure("set-car!", { env, args in
+            guard case let .Pointer(first) = args
+                else { throw Exception.General("Internal error: \(args) must be a list") }
+
+            guard let arg = first.next(), let second = arg.next()
+                else { throw Exception.General("Must provide two arguments") }
+
+            guard case .Pointer = arg.car
+                else { throw Exception.General("First param must be a pair") }
+
+            arg.car = second.car
+
+            return .Nil
+        }),
+
+        "eq?": .Procedure("eq?", Environment.pred2({ first, second in
+            switch (first, second) {
+            case (.Nil, .Nil):
+                return true
+            case (let .Boolean(lhs), let .Boolean(rhs)):
+                return lhs == rhs
+            case (let .Number(lhs), let .Number(rhs)):
+                return lhs == rhs
+            case (let .Character(lhs), let .Character(rhs)):
+                return lhs == rhs
+            case (let .String(lhs), let .String(rhs)):
+                return lhs == rhs
+            case (let .Symbol(lhs), let .Symbol(rhs)):
+                return lhs == rhs
+            case (.Pointer, .Pointer): fallthrough // unspecified
+            case (.Procedure, .Procedure): fallthrough // unspecified
+            case (.Closure, .Closure): fallthrough // unspecified
+            case (.SpecialForm, .SpecialForm): fallthrough // unspecified
+            default:
+                return false
+            }
+
+        })),
+
+        "cons": .Procedure("cons", { env, args in
+            guard case var .Pointer(list) = args
+                else { throw Exception.General("Internal error: \(args) must be a list") }
+
+            guard let first = list.next(), let second = first.next()
+                else { throw Exception.General("Must provide two arguments") }
+
+            return .Pointer(Cell(car:first.car, cdr:second.car))
+        }),
+
+        "cdr": .Procedure("cdr", { env, args in
+            guard case var .Pointer(list) = args
+                else { throw Exception.General("Internal error: \(args) must be a list") }
+
+            guard let next = list.next(), case let .Pointer(res) = next.car
+                else { throw Exception.General("First parameter must be a list: \(list.cdr.display)") }
+
+            return res.cdr
+        }),
+
+        "car": .Procedure("car", { env, args in
+            guard case var .Pointer(list) = args
+                else { throw Exception.General("Internal error: \(args) must be a list") }
+
+            guard let next = list.next(), case let .Pointer(res) = next.car
+                else { throw Exception.General("First parameter must be a list: \(list.cdr.display)") }
+
+            return res.car
+        }),
+
+        "list": .Procedure("list", { env, args in
+            guard case var .Pointer(list) = args
+                else { throw Exception.General("Internal error: \(args) must be a list") }
+
+            return list.cdr
+        }),
+
+        "apply": .Procedure("apply", { env, args in
+            guard case var .Pointer(list) = args
+                else { throw Exception.General("Internal error: \(args) must be a list") }
+
+            guard let first = list.next(), case let .Procedure(_ , proc) = first.car
+                else { throw Exception.General("First parameter must be a procedure: \(list.cdr)") }
+
+            guard case let .Pointer(second) = first.cdr
+                else { throw Exception.General("Second parameter must be a list: \(first.cdr)") }
+
+            // TODO: replace by eval
+            return try proc(env, .Pointer(Cell(car: first.car, cdr:second.car)))
+        }),
+
+        "map": .Procedure("map", { env, args in
+            guard case var .Pointer(list) = args
+                else { throw Exception.General("Internal error: \(args) must be a list") }
+
+            guard let first = list.next() //, case let .Procedure(_ , proc) = first.car
+                else { throw Exception.General("First parameter must be a procedure: \(list.cdr)") }
+
+            guard case let .Pointer(second) = first.cdr
+                else { throw Exception.General("Second parameter must be a list: \(first.cdr)") }
+
+            guard case let .Pointer(item) = second.car
+                else { return .Pointer(Cell(car: .Nil, cdr: .Nil)) }
+
+            var it = item
+            var dd = [Datum]()
+            while true {
+                // hyper hack to support lambdas
+                let arg: Datum = .Pointer(Cell(car:.Pointer(Cell(car: .Symbol("quote"), cdr:.Pointer(Cell(car: it.car, cdr:.Nil)))), cdr: .Nil))
+//                let res = try proc(.Pointer(Cell(car: first.car, cdr: arg)))
+                let res = try env.eval(.Pointer(Cell(car: first.car, cdr: arg)))
+                dd.append(res)
+                guard let next = it.next() else { break }
+                it = next
+            }
+
+            let map: Datum = dd.reversed().reduce(it.cdr, { acc, ptr in
+                return .Pointer(Cell(car: ptr, cdr: acc))
+            })
+
+            return map
+
+//            return try proc(.Pointer(Cell(car: first.car, cdr:second.car)))
+        }),
+
+        "display": .Procedure("display", { env, args in
             guard case var .Pointer(first) = args
                 else { throw Exception.General("Internal error: \(args) must be a list") }
 
@@ -383,6 +590,32 @@ public class Environment {
             }
             return .Nil
         }),
+
+        "error": .Procedure("error", { env, args in
+            guard case var .Pointer(first) = args
+                else { throw Exception.General("Internal error: \(args) must be a list") }
+
+            print("error: ", terminator: "")
+            while let next = first.next() {
+                print(next.car.display)
+                first = next
+            }
+            return .Nil
+        }),
+
+        "newline": .Procedure("newline", { env, args in print(""); return .Nil }),
+
+        "read": .Procedure("read", { env, args in
+            guard case var .Pointer(first) = args
+                else { throw Exception.General("Internal error: \(args) must be a list") }
+
+            if let line = readLine() {
+                return .Symbol(line)
+            }
+
+            return .Nil
+        }),
+
         "+": .Procedure("add", Environment.op2(+, 0)),
         "*": .Procedure("mul", Environment.op2(*, 1)),
         "-": .Procedure("sub", Environment.op3(-, 0)),
@@ -393,6 +626,9 @@ public class Environment {
         "<=": .Procedure("le", Environment.op4(<=)),
         ">=": .Procedure("ge", Environment.op4(>=)),
         "number?": .Procedure("number?", Environment.pred({ $0.isNumber })),
+        "string?": .Procedure("string?", Environment.pred({ $0.isString })),
+        "symbol?": .Procedure("symbol?", Environment.pred({ $0.isSymbol })),
+        "pair?": .Procedure("symbol?", Environment.pred({ $0.isPair })),
         "zero?": .Procedure("zero?", Environment.pred({ $0.isZero })),
         "lambda": .SpecialForm("lambda", { env, cell in
             guard case let .Pointer(first) = cell, case .Pointer = first.cdr
@@ -450,6 +686,32 @@ public class Environment {
 
             return (.Nil, false)
         }),
+
+        "else": .Boolean(true),
+        "cond": .SpecialForm("cond", { env, cell in
+            guard case var .Pointer(arg) = cell
+                else { throw Exception.General("Must provide at least one parameters") }
+
+            while true {
+                guard case var .Pointer(clause) = arg.car
+                    else { throw Exception.General("Clause must be a list") }
+                let pred = try env.eval(clause.car)
+                if pred.isTrue {
+                    guard case var .Pointer(exp) = clause.cdr else { return (pred, false) }
+                    while true {
+                        let res = try env.eval(exp.car)
+                        guard case let .Pointer(next) = exp.cdr else { return (res, false) }
+                        exp = next
+                    }
+                    break
+                }
+                guard let nextClause = arg.next() else { break }
+                arg = nextClause
+            }
+
+            return (.Nil, false)
+        }),
+
         "quote": .SpecialForm("quote", { env, cell in
             guard case let .Pointer(first) = cell
                 else { throw Exception.General("Must provide at least a parameter") }
@@ -476,6 +738,20 @@ public class Environment {
         } else {
             return datum
         }
+
+        // ... or the iterative version
+//        var it = c
+//        var dd = [Datum]()
+//        while let next = it.next() {
+//            dd.append(try eval(next.car))
+//            it = next
+//        }
+//        
+//        let arg: Datum = dd.reversed().reduce(it.cdr, { acc, ptr in
+//            return .Pointer(Cell(car: ptr, cdr: acc))
+//        })
+
+
     }
 
     // TODO: http://www.r6rs.org/final/html/r6rs/r6rs-Z-H-14.html#node_sec_11.20
@@ -490,19 +766,10 @@ public class Environment {
                 let e = try eval(c.car)
                 if case let .Procedure(_ , proc) = e {
 
-                    var it = c
-                    var dd = [Datum]()
-                    while let next = it.next() {
-                        dd.append(try eval(next.car))
-                        it = next
-                    }
-
-                    let arg: Datum = dd.reversed().reduce(it.cdr, { acc, ptr in
-                        return .Pointer(Cell(car: ptr, cdr: acc))
-                    })
+                    let arg = try eval_args(c.cdr)
 
                     // we actually ignore the first 'car'
-                    result = try proc(.Pointer(Cell(car: e, cdr: arg)))
+                    result = try proc(self, .Pointer(Cell(car: e, cdr: arg)))
                     break;
 
                 } else if case let .SpecialForm(_, form) = e {
@@ -521,7 +788,7 @@ public class Environment {
                         extend(frame)
                     }
 
-                    guard case .Pointer = c.cdr else { throw Exception.General("Proper list required for evaluation")}
+//                    if case .Pointer = c.cdr {
                     let args = try eval_args(c.cdr)
 
                     guard case let .Pointer(formal) = lambda, case let .Pointer(body) = formal.cdr
@@ -529,6 +796,12 @@ public class Environment {
 
                     // bind the variables
                     switch formal.car {
+                    case .Nil:
+                        break
+
+                    case let .Symbol(symbol):
+                        define_var(symbol, args)
+
                     case var .Pointer(list):
                         var args = args
                         while true {
@@ -551,10 +824,9 @@ public class Environment {
                             guard case .Pointer = value.cdr else { break }
                             args = value.cdr
                         }
-                    case let .Symbol(symbol):
-                        define_var(symbol, args)
+
                     default:
-                        throw Exception.General("Formal must be a list or a symbol")
+                        throw Exception.General("Formal must be a list, symbol or nothing")
                     }
 
                     // evaluate the expressions left to right

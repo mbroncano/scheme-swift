@@ -28,6 +28,7 @@
 		C75F1ABB1EE636AA00A718A1 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		C75F1AC21EE636C500A718A1 /* Scheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Scheme.swift; sourceTree = "<group>"; };
 		C75F1AC51EE681F100A718A1 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		C7C1A64A1EE8DDA9005367FB /* meta.sch */ = {isa = PBXFileReference; lastKnownFileType = text; path = meta.sch; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -63,6 +64,7 @@
 			children = (
 				C75F1ABB1EE636AA00A718A1 /* main.swift */,
 				C75F1AC21EE636C500A718A1 /* Scheme.swift */,
+				C7C1A64A1EE8DDA9005367FB /* meta.sch */,
 			);
 			path = Scheme;
 			sourceTree = "<group>";
