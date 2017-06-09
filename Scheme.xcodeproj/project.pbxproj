@@ -7,6 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C74F732A1EEA01A2002B56FC /* Builtin.swift in Sources */ = {isa = PBXBuildFile; fileRef = C74F73291EEA01A2002B56FC /* Builtin.swift */; };
+		C74F732C1EEA07F0002B56FC /* Node.swift in Sources */ = {isa = PBXBuildFile; fileRef = C74F732B1EEA07F0002B56FC /* Node.swift */; };
 		C75F1ABC1EE636AA00A718A1 /* main.swift in Sources */ = {isa = PBXBuildFile; fileRef = C75F1ABB1EE636AA00A718A1 /* main.swift */; };
 		C75F1AC31EE636C500A718A1 /* Scheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C75F1AC21EE636C500A718A1 /* Scheme.swift */; };
 /* End PBXBuildFile section */
@@ -24,6 +26,8 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		C74F73291EEA01A2002B56FC /* Builtin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Builtin.swift; sourceTree = "<group>"; };
+		C74F732B1EEA07F0002B56FC /* Node.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Node.swift; sourceTree = "<group>"; };
 		C75F1AB81EE636AA00A718A1 /* Scheme */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = Scheme; sourceTree = BUILT_PRODUCTS_DIR; };
 		C75F1ABB1EE636AA00A718A1 /* main.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = main.swift; sourceTree = "<group>"; };
 		C75F1AC21EE636C500A718A1 /* Scheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Scheme.swift; sourceTree = "<group>"; };
@@ -64,6 +68,8 @@
 			children = (
 				C75F1ABB1EE636AA00A718A1 /* main.swift */,
 				C75F1AC21EE636C500A718A1 /* Scheme.swift */,
+				C74F73291EEA01A2002B56FC /* Builtin.swift */,
+				C74F732B1EEA07F0002B56FC /* Node.swift */,
 				C7C1A64A1EE8DDA9005367FB /* meta.sch */,
 			);
 			path = Scheme;
@@ -127,7 +133,9 @@
 			buildActionMask = 2147483647;
 			files = (
 				C75F1AC31EE636C500A718A1 /* Scheme.swift in Sources */,
+				C74F732A1EEA01A2002B56FC /* Builtin.swift in Sources */,
 				C75F1ABC1EE636AA00A718A1 /* main.swift in Sources */,
+				C74F732C1EEA07F0002B56FC /* Node.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -154,6 +162,8 @@
 				CLANG_WARN_ENUM_CONVERSION = YES;
 				CLANG_WARN_INFINITE_RECURSION = YES;
 				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
 				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
 				CLANG_WARN_STRICT_PROTOTYPES = YES;
@@ -210,6 +220,8 @@
 				CLANG_WARN_ENUM_CONVERSION = YES;
 				CLANG_WARN_INFINITE_RECURSION = YES;
 				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
 				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
 				CLANG_WARN_STRICT_PROTOTYPES = YES;

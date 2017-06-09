@@ -12,7 +12,7 @@ public enum Exception: Error {
     case General(String)
 }
 
-public typealias Procedure = (Environment, Datum) throws -> Datum
+/// Cell is fondation class, contains a pair of two values
 public class Cell: CustomStringConvertible {
     var car: Datum
     var cdr: Datum
@@ -20,13 +20,6 @@ public class Cell: CustomStringConvertible {
     init(car: Datum, cdr: Datum) {
         self.car = car
         self.cdr = cdr
-    }
-
-    public func next() -> Cell? {
-        if case let .Pointer(result) = cdr {
-            return result
-        }
-        return nil
     }
 
     public var description: String {
@@ -45,10 +38,41 @@ public class Cell: CustomStringConvertible {
             return "\(car.display) . \(cdr.display)"
         }
     }
+
+    /// Returns true if this is the empty list
+    public var isEmptyList: Bool {
+        guard case (.Nil, .Nil) = (car, cdr) else { return false }
+        return true
+    }
+
+    /// Returns the next cell in the list when possible
+    ///
+    /// - Returns: An optional cell
+    public func next() -> Cell? {
+        if case let .Pointer(result) = cdr {
+            return result
+        }
+        return nil
+    }
 }
 
+public typealias Procedure = (Environment, Datum) throws -> Datum
 
-public indirect enum Datum: CustomStringConvertible {
+
+/// Datum is the basic data type and contains a value
+///
+/// - Nil: An undefined
+/// - Pointer: A reference to a cell
+/// - Number: A decimal number
+/// - Character: A single character
+/// - Boolean: A boolean value
+/// - Procedure: A pointer to a built-in procedure
+/// - Symbol: An interned symbol
+/// - String: A character string
+/// - SpecialFormt: A pointer to an internal form
+/// - Closure: A lambda closure
+/// - Port: a file port
+public indirect enum Datum: Equatable, CustomStringConvertible {
     case Nil
     case Pointer(Cell)
     case Number(Decimal)
@@ -59,46 +83,60 @@ public indirect enum Datum: CustomStringConvertible {
     case String(String)
     case SpecialForm(String, (Environment, Datum) throws -> (Datum, Bool))
     case Closure([String:Datum], Datum)
+    case Port(FileHandle)
 
-    // TODO: implement eq?, eqv? and eqvalue?
+    /// Returns true if undefined
     public var isNil: Bool {
         guard case .Nil = self else { return false }
         return true
     }
 
+    /// Returns true if points to ()
     public var isNull: Bool {
-        guard case let .Pointer(cell) = self, case .Nil = cell.car else { return false }
+        guard case let .Pointer(cell) = self, cell.isEmptyList else { return false }
         return true
     }
 
+    /// Returns true if #t
     public var isTrue: Bool {
         guard case let .Boolean(bool) = self else { return true }
         return bool
     }
 
+    /// Returns true if number
     public var isNumber: Bool {
         guard case .Number = self else { return false }
         return true
     }
 
+    /// Returns true if string
     public var isString: Bool {
         guard case .String = self else { return false }
         return true
     }
 
+    /// Returns true if symbol
     public var isSymbol: Bool {
         guard case .Symbol = self else { return false }
         return true
     }
 
+    /// Returns true if pair
     public var isPair: Bool {
         guard case .Pointer = self else { return false }
         return true
     }
 
+    /// Returns true if port
+    public var isPort: Bool {
+        guard case .Port = self else { return false }
+        return true
+    }
+
+    /// Returns true if number and zero
     public var isZero: Bool {
-        guard case let .Number(number) = self else { return false }
-        return number == 0
+        guard case let .Number(number) = self, number == 0 else { return false }
+        return true
     }
 
     public var description: String {
@@ -123,6 +161,8 @@ public indirect enum Datum: CustomStringConvertible {
             return "#<special: @\(name)>"
         case let .Closure(_, formal):
             return "#<closure: @\(formal)>"
+        case let .Port(handle):
+            return "#<port: @\(handle.fileDescriptor)>"
         }
     }
 
@@ -146,156 +186,20 @@ public indirect enum Datum: CustomStringConvertible {
             return "\(self)"
         }
     }
-}
 
-public indirect enum Node: CustomStringConvertible {
-    case Atom(String)
-    case List([Node])
-
-    public var description: String {
-        switch self {
-        case let .Atom(string):
-            return "#<\(string)>"
-        case let .List(list):
-            return "(" + list.map{ "\($0)" }.joined(separator: " ") + ")"
+    /// This should be similar to eq?
+    static public func==(lhs: Datum, rhs: Datum) -> Bool {
+        switch (lhs, rhs) {
+        case (.Nil, .Nil): return true
+        case (let .Boolean(lhs), let .Boolean(rhs)): return lhs == rhs
+        case (let .Number(lhs), let .Number(rhs)): return lhs == rhs
+        case (let .Character(lhs), let .Character(rhs)): return lhs == rhs
+        case (let .String(lhs), let .String(rhs)): return lhs == rhs
+        case (let .Symbol(lhs), let .Symbol(rhs)): return lhs == rhs
+        case (let .Pointer(lhs), let .Pointer(rhs)): return lhs === rhs
+        case (let .Procedure(lhs, _), let .Procedure(rhs, _)): return lhs == rhs
+        default: return false
         }
-    }
-
-    public var isQuote: Bool {
-        guard case let .Atom(text) = self, text == "'" else { return false }
-        return true
-    }
-
-    public var isDot: Bool {
-        guard case let .Atom(text) = self, text == "." else { return false }
-        return true
-    }
-
-    public func car() -> Datum {
-        switch self {
-        case let .Atom(text):
-            switch text {
-            case "":
-                return .Nil
-            case "#t":
-                return .Boolean(true)
-            case "#f":
-                return .Boolean(false)
-            default:
-                if let _ = Float(text), let number = Decimal(string: text) {
-                    return .Number(number)
-                } else if let start = text.first, start == "\"" {
-                    return .String(String(text.dropFirst().dropLast()))
-                } else {
-                    return .Symbol(text)
-                }
-            }
-        case let .List(list):
-            var last: Datum = .Nil
-            for cell in list.reversed() {
-                if cell.isQuote {
-                    var lastcdr: Datum = .Nil
-                    if case let .Pointer(lastcell) = last {
-                        lastcdr = lastcell.cdr
-                        lastcell.cdr = .Nil
-                    }
-                    let quote = Cell(car: .Symbol("quote"), cdr: last)
-                    let list = Cell(car: .Pointer(quote), cdr: lastcdr)
-                    last = .Pointer(list)
-                } else if cell.isDot {
-                    if case let .Pointer(lastcell) = last {
-                        last = lastcell.car
-                    }
-                } else {
-                    let new = Cell(car: cell.car(), cdr: last)
-                    last = .Pointer(new)
-                }
-            }
-            return last
-        }
-    }
-
-    init(_ string: String) throws {
-        var iter = string.characters.makeIterator()
-        var text = ""
-        var stack: [Node] = [.List([])]
-
-        let add = {
-            if !text.isEmpty {
-                guard let last = stack.popLast(), case let .List(list) = last
-                    else { throw Exception.General("Parsing") }
-
-                stack.append(.List( list + [.Atom(text)]))
-                text = ""
-            }
-        }
-
-        var string = false
-        while let c = iter.next() {
-            if c == "\"" {
-                if string {
-                    text.append(c)
-                    try add()
-                } else {
-                    try add()
-                    text.append(c)
-                }
-
-                string = !string
-                continue
-            }
-
-            if string {
-                text.append(c)
-                continue
-            }
-
-            switch c {
-            case "\"":
-                if string {
-
-                } else {
-                    string = true
-                }
-
-            case ";":
-                while let n = iter.next(), n != "\n" {}
-
-            case "(":
-                try add()
-                stack.append(.List([]))
-
-            case ")":
-                guard let last = stack.popLast(), case var .List(list) = last
-                    else { throw Exception.General("Parsing") }
-
-                if !text.isEmpty {
-                    list.append(.Atom(text))
-                    text = ""
-                }
-
-                guard let prev = stack.popLast(), case let .List(plist) = prev
-                    else { throw Exception.General("Parsing") }
-
-                stack.append(.List( plist + [.List(list)] ))
-
-            case " ", "\n":
-                try add()
-
-            case "'":
-                if text.isEmpty {
-                    text = "'"
-                    try add()
-                }
-
-            default:
-                text.append(c)
-            }
-        }
-        try add()
-
-        guard let first = stack.first else { throw Exception.General("Umatched parenthesis") }
-        self = first
     }
 }
 
@@ -308,86 +212,6 @@ public class Environment {
             }
         }
         throw Exception.General("Unbound symbol: \(symbol)")
-    }
-
-    static func op4(_ op: @escaping (Decimal, Decimal) -> Bool) -> Procedure {
-        return { env, args in
-            guard case let .Pointer(list) = args
-                else { throw Exception.General("Internal error: \(args) must be a list") }
-
-            guard let first = list.next(), var iter = first.next()
-                else { throw Exception.General("Two parameters required") }
-            guard case var .Number(lhs) = first.car
-                else { throw Exception.General("Parameters must be numbers: \(first.car)") }
-
-
-            repeat {
-                guard case let .Number(rhs) = iter.car
-                    else { throw Exception.General("Parameters must be numbers: \(iter.car)") }
-
-                if !op(lhs, rhs) { return .Boolean(false) }
-
-                lhs = rhs
-                guard let next = iter.next() else { return .Boolean(true) }
-                iter = next
-            } while true
-        }
-    }
-
-    static func op3(_ op: @escaping (Decimal, Decimal) -> Decimal, _ def: Decimal) -> Procedure {
-        return { env, args in
-            guard case let .Pointer(first) = args
-                else { throw Exception.General("Internal error: \(args) must be a list") }
-
-            guard let next = first.next()
-                else { throw Exception.General("Parameter required") }
-            guard case let .Number(number) = next.car
-                else { throw Exception.General("\(next.car) must be a number") }
-            guard case .Pointer = next.cdr
-                else { return .Number(op(def, number)) }
-
-            return try op2(op, number)(env, first.cdr)
-        }
-    }
-
-    static func op2(_ op: @escaping (Decimal, Decimal) -> Decimal, _ def: Decimal) -> Procedure {
-        return { env, args in
-            guard case var .Pointer(first) = args
-                else { throw Exception.General("Internal error: \(args) must be a list") }
-
-            var acc = def
-            while let next = first.next() {
-                guard case let .Number(number) = next.car
-                    else { throw Exception.General("\(next.car) must be a number") }
-                acc = op(acc, number)
-                first = next
-            }
-            return .Number(acc)
-        }
-    }
-
-    static func pred(_ op: @escaping (Datum) -> Bool) -> Procedure {
-        return { env, args in
-            guard case let .Pointer(first) = args
-                else { throw Exception.General("Internal error: \(args) must be a list") }
-
-            guard let arg = first.next(), arg.next() == nil
-                else { throw Exception.General("Must provide one argument") }
-
-            return .Boolean(op(arg.car))
-        }
-    }
-
-    static func pred2(_ op: @escaping (Datum, Datum) -> Bool) -> Procedure {
-        return { env, args in
-            guard case let .Pointer(first) = args
-                else { throw Exception.General("Internal error: \(args) must be a list") }
-
-            guard let arg = first.next(), let second = arg.next()
-                else { throw Exception.General("Must provide two arguments") }
-
-            return .Boolean(op(arg.car, second.car))
-        }
     }
 
     func extend(_ ext: [String:Datum] = [:]) {
@@ -438,198 +262,18 @@ public class Environment {
         }
     }
 
+    func addBuiltin(_ builtin: Datum) throws {
+        guard case let .Procedure(name, _) = builtin
+            else { throw Exception.General("Internal error: not a builtin procedure") }
+
+        if var first = stack.first {
+            first[name] = builtin
+            stack = [first] + stack.dropFirst()
+        }
+    }
+
     var stack: [[String: Datum]] = [[
-        "null?": .Procedure("null?", Environment.pred({ $0.isNil })),
 
-        "set-cdr!": .Procedure("set-car!", { env, args in
-            guard case let .Pointer(first) = args
-                else { throw Exception.General("Internal error: \(args) must be a list") }
-
-            guard let arg = first.next(), let second = arg.next()
-                else { throw Exception.General("Must provide two arguments") }
-
-            guard case .Pointer = arg.car
-                else { throw Exception.General("First param must be a pair") }
-
-            arg.cdr = second.car
-
-            return .Nil
-        }),
-
-        "set-car!": .Procedure("set-car!", { env, args in
-            guard case let .Pointer(first) = args
-                else { throw Exception.General("Internal error: \(args) must be a list") }
-
-            guard let arg = first.next(), let second = arg.next()
-                else { throw Exception.General("Must provide two arguments") }
-
-            guard case .Pointer = arg.car
-                else { throw Exception.General("First param must be a pair") }
-
-            arg.car = second.car
-
-            return .Nil
-        }),
-
-        "eq?": .Procedure("eq?", Environment.pred2({ first, second in
-            switch (first, second) {
-            case (.Nil, .Nil):
-                return true
-            case (let .Boolean(lhs), let .Boolean(rhs)):
-                return lhs == rhs
-            case (let .Number(lhs), let .Number(rhs)):
-                return lhs == rhs
-            case (let .Character(lhs), let .Character(rhs)):
-                return lhs == rhs
-            case (let .String(lhs), let .String(rhs)):
-                return lhs == rhs
-            case (let .Symbol(lhs), let .Symbol(rhs)):
-                return lhs == rhs
-            case (.Pointer, .Pointer): fallthrough // unspecified
-            case (.Procedure, .Procedure): fallthrough // unspecified
-            case (.Closure, .Closure): fallthrough // unspecified
-            case (.SpecialForm, .SpecialForm): fallthrough // unspecified
-            default:
-                return false
-            }
-
-        })),
-
-        "cons": .Procedure("cons", { env, args in
-            guard case var .Pointer(list) = args
-                else { throw Exception.General("Internal error: \(args) must be a list") }
-
-            guard let first = list.next(), let second = first.next()
-                else { throw Exception.General("Must provide two arguments") }
-
-            return .Pointer(Cell(car:first.car, cdr:second.car))
-        }),
-
-        "cdr": .Procedure("cdr", { env, args in
-            guard case var .Pointer(list) = args
-                else { throw Exception.General("Internal error: \(args) must be a list") }
-
-            guard let next = list.next(), case let .Pointer(res) = next.car
-                else { throw Exception.General("First parameter must be a list: \(list.cdr.display)") }
-
-            return res.cdr
-        }),
-
-        "car": .Procedure("car", { env, args in
-            guard case var .Pointer(list) = args
-                else { throw Exception.General("Internal error: \(args) must be a list") }
-
-            guard let next = list.next(), case let .Pointer(res) = next.car
-                else { throw Exception.General("First parameter must be a list: \(list.cdr.display)") }
-
-            return res.car
-        }),
-
-        "list": .Procedure("list", { env, args in
-            guard case var .Pointer(list) = args
-                else { throw Exception.General("Internal error: \(args) must be a list") }
-
-            return list.cdr
-        }),
-
-        "apply": .Procedure("apply", { env, args in
-            guard case var .Pointer(list) = args
-                else { throw Exception.General("Internal error: \(args) must be a list") }
-
-            guard let first = list.next(), case let .Procedure(_ , proc) = first.car
-                else { throw Exception.General("First parameter must be a procedure: \(list.cdr)") }
-
-            guard case let .Pointer(second) = first.cdr
-                else { throw Exception.General("Second parameter must be a list: \(first.cdr)") }
-
-            // TODO: replace by eval
-            return try proc(env, .Pointer(Cell(car: first.car, cdr:second.car)))
-        }),
-
-        "map": .Procedure("map", { env, args in
-            guard case var .Pointer(list) = args
-                else { throw Exception.General("Internal error: \(args) must be a list") }
-
-            guard let first = list.next() //, case let .Procedure(_ , proc) = first.car
-                else { throw Exception.General("First parameter must be a procedure: \(list.cdr)") }
-
-            guard case let .Pointer(second) = first.cdr
-                else { throw Exception.General("Second parameter must be a list: \(first.cdr)") }
-
-            guard case let .Pointer(item) = second.car
-                else { return .Pointer(Cell(car: .Nil, cdr: .Nil)) }
-
-            var it = item
-            var dd = [Datum]()
-            while true {
-                // hyper hack to support lambdas
-                let arg: Datum = .Pointer(Cell(car:.Pointer(Cell(car: .Symbol("quote"), cdr:.Pointer(Cell(car: it.car, cdr:.Nil)))), cdr: .Nil))
-//                let res = try proc(.Pointer(Cell(car: first.car, cdr: arg)))
-                let res = try env.eval(.Pointer(Cell(car: first.car, cdr: arg)))
-                dd.append(res)
-                guard let next = it.next() else { break }
-                it = next
-            }
-
-            let map: Datum = dd.reversed().reduce(it.cdr, { acc, ptr in
-                return .Pointer(Cell(car: ptr, cdr: acc))
-            })
-
-            return map
-
-//            return try proc(.Pointer(Cell(car: first.car, cdr:second.car)))
-        }),
-
-        "display": .Procedure("display", { env, args in
-            guard case var .Pointer(first) = args
-                else { throw Exception.General("Internal error: \(args) must be a list") }
-
-           while let next = first.next() {
-                print(next.car.display)
-                first = next
-            }
-            return .Nil
-        }),
-
-        "error": .Procedure("error", { env, args in
-            guard case var .Pointer(first) = args
-                else { throw Exception.General("Internal error: \(args) must be a list") }
-
-            print("error: ", terminator: "")
-            while let next = first.next() {
-                print(next.car.display)
-                first = next
-            }
-            return .Nil
-        }),
-
-        "newline": .Procedure("newline", { env, args in print(""); return .Nil }),
-
-        "read": .Procedure("read", { env, args in
-            guard case var .Pointer(first) = args
-                else { throw Exception.General("Internal error: \(args) must be a list") }
-
-            if let line = readLine() {
-                return .Symbol(line)
-            }
-
-            return .Nil
-        }),
-
-        "+": .Procedure("add", Environment.op2(+, 0)),
-        "*": .Procedure("mul", Environment.op2(*, 1)),
-        "-": .Procedure("sub", Environment.op3(-, 0)),
-        "/": .Procedure("div", Environment.op3(/, 1)),
-        "<": .Procedure("lt", Environment.op4(<)),
-        ">": .Procedure("gt", Environment.op4(>)),
-        "=": .Procedure("eq", Environment.op4(==)),
-        "<=": .Procedure("le", Environment.op4(<=)),
-        ">=": .Procedure("ge", Environment.op4(>=)),
-        "number?": .Procedure("number?", Environment.pred({ $0.isNumber })),
-        "string?": .Procedure("string?", Environment.pred({ $0.isString })),
-        "symbol?": .Procedure("symbol?", Environment.pred({ $0.isSymbol })),
-        "pair?": .Procedure("symbol?", Environment.pred({ $0.isPair })),
-        "zero?": .Procedure("zero?", Environment.pred({ $0.isZero })),
         "lambda": .SpecialForm("lambda", { env, cell in
             guard case let .Pointer(first) = cell, case .Pointer = first.cdr
                 else { throw Exception.General("Must provide at least two parameters") }
@@ -859,7 +503,10 @@ public class Environment {
         return result
     }
 
-    init() {
+    init() throws {
+        for datum in builtin {
+            try addBuiltin(datum)
+        }
     }
 }
 

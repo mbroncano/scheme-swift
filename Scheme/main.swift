@@ -8,8 +8,6 @@
 
 import Foundation
 
-let environment = Environment()
-
 // (define (foo n) (display n) (foo (+ 1 n))) (foo 0)
 // (define (fib n) (fib-iter 1 0 n)) (define (fib-iter a b count) (if (= count 0) b (fib-iter (+ a b) a (- count 1)))) (fib 500)
 // (define is-even? (lambda (n) (if (= n 0) #t (is-odd? (- n 1)))))
@@ -397,6 +395,7 @@ primitive-procedures))
 
 """
 
+let environment = try Environment()
 
 let line: (String) throws -> Void = { input in
     var car = try Node(input).car()
@@ -413,8 +412,10 @@ let line: (String) throws -> Void = { input in
 }
 
 do {
-    try line(meta)
+//    try line(meta)
 //    try line("(cond ((> 2 3) 'less)(else 'more))")
+//        try line("(define my-pair (cons 1 2)) (set-car! my-pair 4) (set-cdr! my-pair 8) my-pair (null? (list))")
+    try line("(apply (lambda x (display x)) '(1 2 3 4))")
 } catch {
     print(error)
 }
