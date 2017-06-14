@@ -148,7 +148,7 @@ func proc1list1datum(_ op: @escaping (Cell, Cell) -> Void) -> Procedure {
 
         op(pair, second)
 
-        return .Nil
+        return .Undefined
     }
 }
 
@@ -222,7 +222,7 @@ let builtin:[Datum] = [
             print(next.car.display)
             first = next
         }
-        return .Nil
+        return .Undefined
     }),
 
     .Procedure("read", { env, args in
@@ -233,7 +233,7 @@ let builtin:[Datum] = [
             return .Symbol(line)
         }
 
-        return .Nil
+        return .Undefined
     }),
     
     .Procedure("apply", { env, args in
@@ -242,5 +242,131 @@ let builtin:[Datum] = [
 
         return try env.eval(.Pointer(Cell(car: first.car, cdr:second.car)))
     }),
+
+    // -------------------------------------------------------------------------------
+
+    .SpecialForm("lambda", { env, cell in
+        guard case let .Pointer(first) = cell, case .Pointer = first.cdr
+            else { throw Exception.General("Must provide at least two parameters") }
+
+        // TODO: filter the closure for the free variables in the lambda body(s)
+        let new = Closure(env: env.close(), formal: first.car, body: first.cdr)
+        return (.Closure(new), false)
+    }),
+
+//    .SpecialForm("let", { env, cell in
+//        guard case let .Pointer(first) = cell, case let .Pointer(second) = first.cdr
+//            else { throw Exception.General("Must provide at least two parameters") }
+//
+//        // TODO: add support for named letrec
+//        //            if case let .Symbol(vars) = first.car {
+//        //
+//        //            }
+//
+//        guard case var .Pointer(vars) = first.car
+//            else { throw Exception.General("First parameter must be a list") }
+//
+//        // evaluate the formals
+//        var cdr = vars.cdr
+//        while true {
+//            guard case let .Pointer(formal) = vars.car else { throw Exception.General("Expected format to be lists") }
+//            guard case let .SpecialForm(_, define) = try env.resolve("define") else { throw Exception.General("asdf") }
+//            try define(env, formal)
+//
+//            guard case let .Pointer(next) = vars.cdr else { break }
+//            vars = next
+//        }
+//
+//        // evaluate the expressions left to right
+//        var result: Datum = .Nil
+//        var body = second
+//        while true {
+//            guard case let .Pointer(next) = body.cdr
+//                else { return (body.car, true) }
+//            _ = try env.eval(body.car)
+//            body = next
+//        }
+//
+//        // return the last result
+//        //return (.Nil, false)
+//    }),
+
+    .SpecialForm("if", { env, cell in
+        guard case let .Pointer(first) = cell, case let .Pointer(second) = first.cdr
+            else { throw Exception.General("Must provide at least two parameters") }
+
+        if try env.eval(first.car).isTrue {
+            return (second.car, true)
+        }
+
+        if case let .Pointer(third) = second.cdr {
+            return (third.car, true)
+        }
+
+        return (.Undefined, false)
+    }),
+
+    .SpecialForm("else", { _, _ in return (.Boolean(true), false) }),
+    .SpecialForm("cond", { env, cell in
+        guard case var .Pointer(arg) = cell
+            else { throw Exception.General("Must provide at least one parameters") }
+
+        while true {
+            guard case var .Pointer(clause) = arg.car
+                else { throw Exception.General("Clause must be a list") }
+            let pred = try env.eval(clause.car)
+            if pred.isTrue {
+                guard case var .Pointer(exp) = clause.cdr else { return (pred, false) }
+                while true {
+                    guard case let .Pointer(next) = exp.cdr else { return (exp.car, true) }
+                    exp = next
+                    let _ = try env.eval(exp.car)
+                }
+                break
+            }
+            guard let nextClause = arg.next() else { break }
+            arg = nextClause
+        }
+
+        return (.Undefined, false)
+    }),
+
+    .SpecialForm("quote", { env, cell in
+        guard case let .Pointer(first) = cell
+            else { throw Exception.General("Must provide at least a parameter") }
+
+        return (first.car, false)
+    }),
+
+    .SpecialForm("define", { env, cell in
+        guard case let .Pointer(first) = cell
+            else { throw Exception.General("Must provide at least a parameter") }
+
+        // first form: (define <symbol> <expression>)
+        if case let .Symbol(symbol) = first.car {
+            var value: Datum = .Nil
+            if case let .Pointer(def) = first.cdr {
+                let evaluate = true
+                value = evaluate ? try env.eval(def.car) : def.car
+            }
+
+            env.define_var(symbol, value)
+
+        // second form: (define (<symbol> <formal>) <expression>)
+        } else if case let .Pointer(lambda) = first.car {
+            guard case .Pointer = first.cdr
+                else { throw Exception.General("Must provide at least two parameters") }
+
+            guard case let .Symbol(symbol) = lambda.car
+                else { throw Exception.General("Lambda name must be a symbol") }
+
+            env.define_var(symbol, .Closure(Closure(env: env.close(), formal: lambda.cdr, body: first.cdr)))
+
+        } else {
+            throw Exception.General("Define must be a symbol or a lambda")
+        }
+
+        return (.Undefined, false)
+    })
 ]
 

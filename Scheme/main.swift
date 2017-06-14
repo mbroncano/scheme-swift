@@ -402,7 +402,10 @@ let line: (String) throws -> Void = { input in
     while case let .Pointer(first) = car {
         let cell = Cell(car: first.car, cdr: .Nil)
 //        print("~# ", cell.display)
-        try print("=", environment.eval(cell.car).display)
+        let result = try environment.eval(cell.car)
+        if case .Undefined = result {} else {
+            print("=", result.display)
+        }
         guard environment.stack.count == 1 else {
             print(environment.stack)
             throw Exception.General("Stack error")
@@ -413,9 +416,11 @@ let line: (String) throws -> Void = { input in
 
 do {
 //    try line(meta)
-//    try line("(cond ((> 2 3) 'less)(else 'more))")
-//        try line("(define my-pair (cons 1 2)) (set-car! my-pair 4) (set-cdr! my-pair 8) my-pair (null? (list))")
-    try line("(apply (lambda x (display x)) '(1 2 3 4))")
+    try line(s)
+    try line("(fib 500)")
+    try line("(cond ((> 2 3) 'less)(else 'more))")
+    try line("(define my-pair (cons 1 2)) (set-car! my-pair 4) (set-cdr! my-pair 8) my-pair (null? (list))")
+    try line("((lambda x (display x)) '(1 2 3 4)) (apply (lambda x (display x)) '(1 2 3 4))")
 } catch {
     print(error)
 }
