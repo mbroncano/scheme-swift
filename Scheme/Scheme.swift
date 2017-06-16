@@ -292,7 +292,7 @@ public indirect enum Datum: Equatable, CustomStringConvertible {
     public var display: String {
         switch self {
         case .Undefined:
-            return "???"
+            return ""
         case .Nil:
             return "()"
         case let .Symbol(string):
@@ -538,6 +538,24 @@ public class Environment {
                 throw Exception.General("Internal error: not a builtin procedure or syntax form\(datum)")
             }
         }
+    }
+
+    func readLine(input: String) throws -> String {
+        var car = try Node(input).car()
+        var result: Datum = .Nil
+        while case let .Pointer(first) = car {
+            let cell = Cell(car: first.car, cdr: .Nil)
+            result = try eval(cell.car)
+//            if case .Undefined = result {} else {
+//                print("=", result.display)
+//            }
+            guard stack.count == 1 else {
+                print(stack)
+                throw Exception.General("Stack error")
+            }
+            car = first.cdr
+        }
+        return result.display
     }
 }
 
