@@ -414,13 +414,35 @@ let line: (String) throws -> Void = { input in
     }
 }
 
+let loop = """
+(let loop
+((numbers '(3 -2 1 6 -5))
+(nonneg '())
+(neg '()))
+(cond ((null? numbers)
+(list nonneg neg))
+((>= (car numbers) 0)
+(loop (cdr numbers)
+(cons (car numbers) nonneg)
+neg))
+(else
+(loop (cdr numbers)
+nonneg
+(cons (car numbers) neg)))))
+"""
+
 do {
 //    try line(meta)
     try line(s)
+    try line(loop)
+    try line("(map number? '(1 2 3))")
     try line("(fib 500)")
     try line("(cond ((> 2 3) 'less)(else 'more))")
+    try line("(define l (list 1 2 3 4)) (car l) (cdr l)")
     try line("(define my-pair (cons 1 2)) (set-car! my-pair 4) (set-cdr! my-pair 8) my-pair (null? (list))")
     try line("((lambda x (display x)) '(1 2 3 4)) (apply (lambda x (display x)) '(1 2 3 4))")
+    try line("(begin) (begin 1 2 3) (let ((x 666)) x)")
+    try line("(let ((x 10)(y 20)(z 30)) (+ 10 x) (+ x y z))")
 } catch {
     print(error)
 }

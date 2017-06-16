@@ -56,11 +56,109 @@ public class Cell: CustomStringConvertible {
     }
 }
 
+extension Datum: Collection {
+    public typealias Index = Int
+    public typealias SubSequence = Slice<Datum>
+
+    public var startIndex: Index { return 0 }
+    public var endIndex: Index { return reduce(0, { a, _ in return a + 1 }) }
+
+    public func index(after i: Int) -> Int { return i + 1 }
+
+    public subscript(position: Int) -> Datum {
+        guard let result = enumerated().first(where: { return $0.0 == position }) else {
+            return .Nil
+        }
+
+        return result.1
+    }
+
+    public init(slice: SubSequence) {
+        self = slice.reversed().reduce(.Nil) { cur, car in
+            .Pointer(Cell(car: car, cdr: cur))
+        }
+    }
+}
+
+//extension Cell: Sequence {
+//    public struct Iterator: IteratorProtocol {
+//        var cell: Cell? = nil
+//
+//        mutating public func next() -> Cell? {
+//            guard let cur = cell else {
+//                return nil
+//            }
+//
+//            guard case let .Pointer(next) = cur.cdr else {
+//                cell = nil
+//                return nil
+//            }
+//
+//            cell = next
+//            return cell
+//        }
+//    }
+//
+//    public func makeIterator() -> Iterator {
+//        return Iterator(cell: self)
+//    }
+//}
+
+extension Datum: Sequence {
+    public struct Iterator: IteratorProtocol {
+        var datum: Datum
+
+        // check for dotted list (i.e. datum != .Nil)
+        // and decide what to do
+        mutating public func next() -> Datum? {
+            guard case let .Pointer(cell) = datum else {
+                return nil
+            }
+            datum = cell.cdr
+            return cell.car
+        }
+    }
+
+    public func makeIterator() -> Iterator {
+        return Iterator(datum: self)
+    }
+}
+
+extension Datum {
+    public func asSymbol() throws -> String {
+        guard case let .Symbol(symbol) = self else {
+            throw Exception.General("\(self) must be a symbol")
+        }
+        return symbol
+    }
+
+    public func asNumber() throws -> Decimal {
+        guard case let .Number(number) = self else {
+            throw Exception.General("\(self) must be a number")
+        }
+        return number
+    }
+
+    public func asPointer() throws -> Cell {
+        guard case let .Pointer(pointer) = self else {
+            throw Exception.General("\(self) must be a pair")
+        }
+        return pointer
+    }
+
+    public func asProcedure() throws -> Procedure {
+        guard case let .Procedure(_, procedure) = self else {
+            throw Exception.General("\(self) must be a procedure")
+        }
+        return procedure
+    }
+}
+
 public typealias Procedure = (Environment, Datum) throws -> Datum
 public class Closure {
     let env: [String: Datum]
-    let formal: Datum
-    let body: Datum
+    var formal: Datum
+    var body: Datum
 
     init(env: [String: Datum], formal: Datum, body: Datum) {
         self.env = env
@@ -72,7 +170,7 @@ public class Closure {
 
 /// Datum is the basic data type and contains a value
 ///
-///  - Undefined: An undefined value
+/// - Undefined: An undefined value
 /// - Nil: A pointer to the empty list
 /// - Pointer: A reference to a cell
 /// - Number: A decimal number
@@ -84,6 +182,7 @@ public class Closure {
 /// - SpecialFormt: A pointer to an internal form
 /// - Closure: A lambda closure
 /// - Port: a file port
+/// - Vector: a vector of objects
 public indirect enum Datum: Equatable, CustomStringConvertible {
     case Undefined
     case Nil
@@ -97,16 +196,17 @@ public indirect enum Datum: Equatable, CustomStringConvertible {
     case SpecialForm(String, (Environment, Datum) throws -> (Datum, Bool))
     case Closure(Closure)
     case Port(FileHandle)
+    case Vector([Datum])
 
     /// Returns true if undefined
-    public var isNil: Bool {
-        guard case .Nil = self else { return false }
+    public var isUndefined: Bool {
+        guard case .Undefined = self else { return false }
         return true
     }
 
     /// Returns true if points to ()
     public var isNull: Bool {
-        guard case let .Pointer(cell) = self, cell.isEmptyList else { return false }
+        guard case .Nil = self else { return false }
         return true
     }
 
@@ -146,6 +246,12 @@ public indirect enum Datum: Equatable, CustomStringConvertible {
         return true
     }
 
+    /// Returns true if vector
+    public var isVector: Bool {
+        guard case .Vector = self else { return false }
+        return true
+    }
+
     /// Returns true if number and zero
     public var isZero: Bool {
         guard case let .Number(number) = self, number == 0 else { return false }
@@ -178,6 +284,8 @@ public indirect enum Datum: Equatable, CustomStringConvertible {
             return "#<closure: @\(closure.formal.display) - \(closure.body.display)>"
         case let .Port(handle):
             return "#<port: @\(handle.fileDescriptor)>"
+        case let .Vector(vector):
+            return "#<vector: @\(vector)>"
         }
     }
 
@@ -199,6 +307,8 @@ public indirect enum Datum: Equatable, CustomStringConvertible {
             return (value ? "#t" : "#f")
         case let .Pointer(cell):
             return "(\(cell.display))"
+        case let .Vector(vector):
+            return "#(" + vector.map { $0.display }.joined(separator: " ") + ")"
         default:
             return "\(self)"
         }
@@ -321,16 +431,19 @@ public class Environment {
         }
     }
 
-    func eval_closure(_ closure: Closure, _ arguments: Datum) throws -> (Datum, Bool) {
+    func eval_closure(_ closure: Closure, _ arguments: Datum, _ name: String? = nil) throws -> (Datum, Bool) {
         guard case let .Pointer(body) = closure.body
             else { throw Exception.General("Error in lambda body") }
 
         // create frame if the last one wasn't create by this same closure
         if let last = stack.last, let owner = last["__owner__"],
-            owner == .Closure(closure) {
+            owner == .Closure(closure) {} else {
             var frame = closure.env
             frame["__owner__"] = .Closure(closure)
             self.extend(frame)
+            if let name = name {
+                define_var(name, .Closure(closure))
+            }
         }
 
         // bind the arguments and the formals
@@ -345,6 +458,22 @@ public class Environment {
         }
 
         return (iter.car, true)
+    }
+
+    func eval_proc(_ proc: Datum, _ arguments: Datum) throws -> Datum {
+        switch proc {
+        case let .Procedure(_ , procedure):
+            let arg = Datum.Pointer(Cell(car: proc, cdr: arguments))
+            let res = try procedure(self, arg)
+            return res
+
+        case let .Closure(closure):
+            let (res, _) = try eval_closure(closure, arguments.asPointer().car)
+            return res
+
+        default:
+            throw Exception.General("Not a procedure or closure \(proc)")
+        }
     }
 
     func eval_list(_ proc: Datum, _ arguments: Datum) throws -> (Datum, Bool) {
