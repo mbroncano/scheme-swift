@@ -8,7 +8,7 @@
 
 import Foundation
 
-func op4(_ op: @escaping (Decimal, Decimal) -> Bool) -> Procedure {
+func cmpHelper(_ op: @escaping (Decimal, Decimal) -> Bool) -> Procedure {
     return {
         try .Boolean(nil == zip($1.dropFirst().dropLast(), $1.dropFirst(2)).first(where: {
             try !op($0.0.asNumber(), $0.1.asNumber())
@@ -16,7 +16,7 @@ func op4(_ op: @escaping (Decimal, Decimal) -> Bool) -> Procedure {
     }
 }
 
-func op3(_ op: @escaping (Decimal, Decimal) -> Decimal, _ def: Decimal) -> Procedure {
+func subHelper(_ op: @escaping (Decimal, Decimal) -> Decimal, _ def: Decimal) -> Procedure {
     return { env, args in
         guard case let .Pointer(first) = args
             else { throw Exception.General("Internal error: \(args) must be a list") }
@@ -28,25 +28,25 @@ func op3(_ op: @escaping (Decimal, Decimal) -> Decimal, _ def: Decimal) -> Proce
         guard case .Pointer = next.cdr
             else { return .Number(op(def, number)) }
 
-        return try op2(op, number)(env, first.cdr)
+        return try sumHelper(op, number)(env, first.cdr)
     }
 }
 
-func op2(_ op: @escaping (Decimal, Decimal) -> Decimal, _ def: Decimal) -> Procedure {
+func sumHelper(_ op: @escaping (Decimal, Decimal) -> Decimal, _ def: Decimal) -> Procedure {
     return { try .Number($1.dropFirst().reduce(def, { try op($0, $1.asNumber()) })) }
 }
 
 let builtin:[Datum] = [
     // arithmetic
-    .Procedure("+", op2(+, 0)),
-    .Procedure("*", op2(*, 1)),
-    .Procedure("-", op3(-, 0)),
-    .Procedure("/", op3(/, 1)),
-    .Procedure("<", op4(<)),
-    .Procedure(">", op4(>)),
-    .Procedure("=", op4(==)),
-    .Procedure("<=",op4(<=)),
-    .Procedure(">=",op4(>=)),
+    .Procedure("+", sumHelper(+, 0)),
+    .Procedure("*", sumHelper(*, 1)),
+    .Procedure("-", subHelper(-, 0)),
+    .Procedure("/", subHelper(/, 1)),
+    .Procedure("<", cmpHelper(<)),
+    .Procedure(">", cmpHelper(>)),
+    .Procedure("=", cmpHelper(==)),
+    .Procedure("<=",cmpHelper(<=)),
+    .Procedure(">=",cmpHelper(>=)),
 
     // predicates
     .Procedure("null?", { .Boolean($1[1].isNull) }),
