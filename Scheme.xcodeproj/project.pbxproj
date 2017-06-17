@@ -7,6 +7,12 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		C70DB6D91EF4B24E00AE3CA1 /* Cell.swift in Sources */ = {isa = PBXBuildFile; fileRef = C70DB6D81EF4B24E00AE3CA1 /* Cell.swift */; };
+		C70DB6DB1EF4B29700AE3CA1 /* Datum.swift in Sources */ = {isa = PBXBuildFile; fileRef = C70DB6DA1EF4B29700AE3CA1 /* Datum.swift */; };
+		C70DB6DD1EF4B2BE00AE3CA1 /* Closure.swift in Sources */ = {isa = PBXBuildFile; fileRef = C70DB6DC1EF4B2BE00AE3CA1 /* Closure.swift */; };
+		C70DB6DE1EF4B35000AE3CA1 /* Cell.swift in Sources */ = {isa = PBXBuildFile; fileRef = C70DB6D81EF4B24E00AE3CA1 /* Cell.swift */; };
+		C70DB6DF1EF4B35300AE3CA1 /* Datum.swift in Sources */ = {isa = PBXBuildFile; fileRef = C70DB6DA1EF4B29700AE3CA1 /* Datum.swift */; };
+		C70DB6E01EF4B35500AE3CA1 /* Closure.swift in Sources */ = {isa = PBXBuildFile; fileRef = C70DB6DC1EF4B2BE00AE3CA1 /* Closure.swift */; };
 		C71212011EF49B4F003D0EBB /* Tests.swift in Sources */ = {isa = PBXBuildFile; fileRef = C71212001EF49B4F003D0EBB /* Tests.swift */; };
 		C71212071EF49C1B003D0EBB /* Scheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = C75F1AC21EE636C500A718A1 /* Scheme.swift */; };
 		C71212081EF49C1E003D0EBB /* Builtin.swift in Sources */ = {isa = PBXBuildFile; fileRef = C74F73291EEA01A2002B56FC /* Builtin.swift */; };
@@ -31,6 +37,9 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		C70DB6D81EF4B24E00AE3CA1 /* Cell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Cell.swift; sourceTree = "<group>"; };
+		C70DB6DA1EF4B29700AE3CA1 /* Datum.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Datum.swift; sourceTree = "<group>"; };
+		C70DB6DC1EF4B2BE00AE3CA1 /* Closure.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Closure.swift; sourceTree = "<group>"; };
 		C71211F71EF499F2003D0EBB /* XCTest.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = XCTest.framework; path = Platforms/MacOSX.platform/Developer/Library/Frameworks/XCTest.framework; sourceTree = DEVELOPER_DIR; };
 		C71211FE1EF49B4F003D0EBB /* Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = Tests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C71212001EF49B4F003D0EBB /* Tests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Tests.swift; sourceTree = "<group>"; };
@@ -74,6 +83,7 @@
 		C71211FF1EF49B4F003D0EBB /* Tests */ = {
 			isa = PBXGroup;
 			children = (
+				C7C1A64A1EE8DDA9005367FB /* meta.sch */,
 				C71212001EF49B4F003D0EBB /* Tests.swift */,
 				C71212021EF49B4F003D0EBB /* Info.plist */,
 			);
@@ -107,7 +117,9 @@
 				C75F1AC21EE636C500A718A1 /* Scheme.swift */,
 				C74F73291EEA01A2002B56FC /* Builtin.swift */,
 				C74F732B1EEA07F0002B56FC /* Node.swift */,
-				C7C1A64A1EE8DDA9005367FB /* meta.sch */,
+				C70DB6D81EF4B24E00AE3CA1 /* Cell.swift */,
+				C70DB6DA1EF4B29700AE3CA1 /* Datum.swift */,
+				C70DB6DC1EF4B2BE00AE3CA1 /* Closure.swift */,
 			);
 			path = Scheme;
 			sourceTree = "<group>";
@@ -202,8 +214,11 @@
 			files = (
 				C71212071EF49C1B003D0EBB /* Scheme.swift in Sources */,
 				C71212081EF49C1E003D0EBB /* Builtin.swift in Sources */,
+				C70DB6DE1EF4B35000AE3CA1 /* Cell.swift in Sources */,
 				C71212011EF49B4F003D0EBB /* Tests.swift in Sources */,
+				C70DB6E01EF4B35500AE3CA1 /* Closure.swift in Sources */,
 				C71212091EF49C21003D0EBB /* Node.swift in Sources */,
+				C70DB6DF1EF4B35300AE3CA1 /* Datum.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -213,8 +228,11 @@
 			files = (
 				C75F1AC31EE636C500A718A1 /* Scheme.swift in Sources */,
 				C74F732A1EEA01A2002B56FC /* Builtin.swift in Sources */,
+				C70DB6D91EF4B24E00AE3CA1 /* Cell.swift in Sources */,
 				C75F1ABC1EE636AA00A718A1 /* main.swift in Sources */,
+				C70DB6DD1EF4B2BE00AE3CA1 /* Closure.swift in Sources */,
 				C74F732C1EEA07F0002B56FC /* Node.swift in Sources */,
+				C70DB6DB1EF4B29700AE3CA1 /* Datum.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -383,6 +401,7 @@
 				C71212051EF49B4F003D0EBB /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
 		};
 		C75F1AB31EE636AA00A718A1 /* Build configuration list for PBXProject "Scheme" */ = {
 			isa = XCConfigurationList;

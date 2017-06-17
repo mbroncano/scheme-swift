@@ -35,7 +35,7 @@ public indirect enum Node: CustomStringConvertible {
         return true
     }
 
-    public func car() -> Datum {
+    func car() -> Datum {
         switch self {
         case let .Atom(text):
             switch text {
